@@ -1,137 +1,115 @@
-# @enalmada/storybook-addon-mock-urql
+# Changelog
 
-## 1.0.0
+All notable changes to this project will be documented in this file.
 
-### Major Changes
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-- 8c0c7d6: Initial release: Production-ready streaming infrastructure for TanStack Start
+## [2.0.0] - 2025-11-09
 
-  - Auto-reconnection with exponential backoff and jitter
-  - Page Visibility API integration
-  - React Query integration
-  - Event broadcaster factory (EventEmitter/Redis)
-  - Full TypeScript type safety
-  - 21 comprehensive unit tests
-  - Zero runtime dependencies
+### 🎉 Major Rewrite
 
-## 0.1.1
+Complete architectural redesign from custom async generators to standards-compliant Server-Sent Events (SSE).
 
-### Patch Changes
+### Added
 
-- a17728d: Add publint validation to build process and fix test command
+- **better-sse integration** - Standards-compliant SSE implementation
+- **`createSSEChannelManager()`** - Type-safe channel-based broadcasting
+- **`createSSERouteHandler()`** - Helper for creating SSE route handlers
+- **`useSSEConnection()`** - Basic SSE connection hook
+- **`useSSEQueryInvalidation()`** - TanStack Query integration hook
+- **Automatic memory cleanup** - Channels removed when all sessions disconnect
+- **Dynamic query keys** - Support for event-driven query key selection
+- **Conditional connections** - `enabled` prop to control connection lifecycle
 
-  - Add publint --strict validation as final build step to catch package structure issues before publishing
-  - Fix test:unit script to use 'vitest run' instead of 'vitest' to prevent watch mode during CI/check commands
-  - Update turbo.json to include build:validate task with proper dependency chain
+### Changed
 
-## 0.1.0
+- **BREAKING**: Replaced async generator API with EventSource-based API
+- **BREAKING**: Changed from NDJSON streaming to SSE protocol
+- **BREAKING**: New function names and signatures throughout
+- **BREAKING**: Requires `better-sse` as peer dependency
 
-### Minor Changes
+### Removed
 
-- b9eb332: Major template improvements and modernization:
+- **BREAKING**: Removed v1 async generator infrastructure
+- **BREAKING**: Removed `useStreamInvalidation` (replaced with `useSSEQueryInvalidation`)
+- **BREAKING**: Removed `createEventBroadcaster` (replaced with `createSSEChannelManager`)
 
-  **Removed lint-staged** - Migrated to native lefthook features using `{staged_files}` placeholder for better performance
+### Why v2?
 
-  **Enhanced Biome configuration:**
+**v1** used custom async generators with NDJSON streaming. While functional, it had reliability issues and required custom reconnection logic.
 
-  - Added `assist.actions.source.organizeImports` for auto-import organization
-  - Increased line width to 120 characters
-  - Added trailing commas for better git diffs
-  - Added `noUnusedImports` linter rule
-  - Enabled VCS integration
+**v2** uses browser-native EventSource API with better-sse backend. Benefits:
 
-  **Improved Lefthook:**
+- ✅ Standards-compliant SSE protocol
+- ✅ Auto-reconnection built into EventSource
+- ✅ Production-proven reliability
+- ✅ Simpler implementation
+- ✅ Better TypeScript support
+- ✅ Lower complexity
 
-  - Added `parallel: true` for 2-3x faster pre-commit hooks
-  - Added type-check command on staged TypeScript files
-  - Auto-stages fixed files with `stage_fixed: true`
-  - Added helpful custom fail messages
+### Migration Guide
 
-  **Modernized TypeScript config:**
+v1 and v2 are completely different architectures. To migrate:
 
-  - Changed `moduleResolution` to `Bundler` (optimized for modern bundlers)
-  - Added `exactOptionalPropertyTypes` for stricter type safety
-  - Added `isolatedModules` for better build performance
-  - Added path alias support (`@/*` → `./src/*`)
+1. **Server-side:**
+   ```typescript
+   // v1
+   export const broadcaster = createEventBroadcaster({ ... });
 
-  **Package.json improvements:**
+   // v2
+   export const commentChannels = createSSEChannelManager<CommentEvent>({ ... });
+   ```
 
-  - Added modern `exports` field for better module resolution
-  - Added `engines`, `files`, and `sideEffects` fields
-  - Fixed Windows compatibility in build:clear script
+2. **Routes:**
+   ```typescript
+   // v1 - Async generator server function
+   export const watchComments = createServerFn({ method: 'POST' })
+     .handler(async function* ({ data }) {
+       for await (const event of subscribeToComments(data.id)) {
+         yield event;
+       }
+     });
 
-  **Enhanced Turbo configuration:**
+   // v2 - SSE route handler
+   export const Route = createFileRoute('/api/sse/comments/$id' as any)({
+     server: {
+       handlers: {
+         GET: createSSERouteHandler({
+           getChannel: (params) => commentChannels.getChannel(params.id)
+         })
+       }
+     }
+   });
+   ```
 
-  - Cleaned up task definitions to prevent recursion
-  - Added proper input tracking for all tasks
-  - Improved caching strategy
+3. **Client-side:**
+   ```typescript
+   // v1
+   useStreamInvalidation({
+     serverFn: watchComments,
+     input: { id: discussionId },
+     queryKeys: [['comments', discussionId]]
+   });
 
-  **Added `check` command** - Run lint, type-check, and tests in parallel
+   // v2
+   useSSEQueryInvalidation({
+     endpoint: `/api/sse/comments/${discussionId}`,
+     queryKeys: [['comments', discussionId]]
+   });
+   ```
 
-  **Documentation:**
+For v1 reference, see the `v1-deprecated` branch.
 
-  - Updated README.md to reflect actual tech stack
-  - Completely rewrote CLAUDE.md with comprehensive guidance
-  - Fixed all documentation inconsistencies
+## [1.0.0] - 2024-11-08
 
-## 0.0.8
+### Added
 
-### Patch Changes
+- Initial release with async generator streaming
+- `createEventBroadcaster()` for event management
+- `useStreamInvalidation()` for TanStack Query integration
+- In-memory and Redis pub/sub support
+- Page visibility API integration
+- Exponential backoff reconnection
 
-- 32272e3: dependency updates
-- 32272e3: biome
-- c4e5f2f: Updated dependency `@scaleway/changesets-renovate` to `1.4.0`.
-  Updated dependency `@types/node` to `20.10.6`.
-  Updated dependency `@typescript-eslint/eslint-plugin` to `6.17.0`.
-  Updated dependency `@typescript-eslint/parser` to `6.17.0`.
-  Updated dependency `bun-types` to `1.0.21`.
-  Updated dependency `eslint-plugin-prettier` to `5.1.2`.
-  Updated dependency `vitest` to `1.1.1`.
-
-## 0.0.7
-
-### Patch Changes
-
-- 7d5bf51: Updated dependency `lint-staged` to `15.0.2`.
-
-## 0.0.6
-
-### Patch Changes
-
-- de14d1f: automated external in build
-
-## 0.0.5
-
-### Patch Changes
-
-- dac135c: fixpack
-
-## 0.0.4
-
-### Patch Changes
-
-- c4a16a7: pre-commit to executable, lintstaged to import
-
-## 0.0.3
-
-### Patch Changes
-
-- 507c17b: fix lint, add tests
-
-## 0.0.2
-
-### Patch Changes
-
-- effe886: bun.lockb file needs to be binary
-
-## 0.0.3
-
-### Patch Changes
-
-- 16dba9f: export type Mock
-
-## 0.0.2
-
-### Patch Changes
-
-- 616efc8: readme
+**Note:** v1 is deprecated. Please use v2 for new projects.

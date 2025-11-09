@@ -24,7 +24,9 @@
       },
       "peerDependencies": {
         "@tanstack/react-query": "^5.0.0",
+        "@tanstack/react-router": "^1.0.0",
         "@tanstack/react-start": "^1.0.0",
+        "better-sse": "^0.15.1",
         "react": "^18.0.0 || ^19.0.0",
       },
       "optionalPeers": [
@@ -379,6 +381,8 @@
     "baseline-browser-mapping": ["baseline-browser-mapping@2.8.25", "", { "bin": { "baseline-browser-mapping": "dist/cli.js" } }, "sha512-2NovHVesVF5TXefsGX1yzx1xgr7+m9JQenvz6FQY3qd+YXkKkYiv+vTCc7OriP9mcDZpTC5mAOYN4ocd29+erA=="],
 
     "better-path-resolve": ["better-path-resolve@1.0.0", "", { "dependencies": { "is-windows": "^1.0.0" } }, "sha512-pbnl5XzGBdrFU/wT4jqmJVPn2B6UHPBOhzMQkY/SPUPB6QtUXtmBHBIwCbXJol93mOpGMnQyP/+BB19q04xj7g=="],
+
+    "better-sse": ["better-sse@0.15.1", "", {}, "sha512-E8YmmIs7P2T5nHM8VG5Pmtp8CgDsIhT+6CYhg+8Gmke5kJb11ohN1jtEXn/2taSr7WkcU3yNTgoqNYvZ/GQ4sw=="],
 
     "binary-extensions": ["binary-extensions@2.3.0", "", {}, "sha512-Ceh+7ox5qe7LJuLHoY0feh3pHuUDHAcRUeyL2VYghZwfpkNIy/+8Ocg0a3UuSoYzavmylwuLWQOf3hl0jjMMIw=="],
 
