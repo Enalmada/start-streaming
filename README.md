@@ -9,12 +9,12 @@
 
 This library wraps [better-sse](https://github.com/MatthewWid/better-sse) with TanStack Start/Query-specific patterns:
 
-✅ **Channel-based architecture** - Automatic resource-keyed broadcasting with memory cleanup
-✅ **TanStack Query integration** - Auto-invalidate queries on SSE events
-✅ **Route handler factory** - Drop-in SSE endpoints for TanStack Start
-✅ **Type-safe end-to-end** - Full TypeScript from server events to client handlers
-✅ **Memory management** - Automatic channel cleanup when sessions disconnect
-✅ **Production patterns** - Redis pub/sub ready for horizontal scaling
+- ✅ **Channel-based architecture** - Automatic resource-keyed broadcasting with memory cleanup
+- ✅ **TanStack Query integration** - Auto-invalidate queries on SSE events
+- ✅ **Route handler factory** - Drop-in SSE endpoints for TanStack Start
+- ✅ **Type-safe end-to-end** - Full TypeScript from server events to client handlers
+- ✅ **Memory management** - Automatic channel cleanup when sessions disconnect
+- ✅ **Production patterns** - Redis pub/sub ready for horizontal scaling
 
 ## Installation
 
