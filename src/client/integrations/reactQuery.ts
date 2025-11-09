@@ -94,6 +94,8 @@ export function useStreamInvalidation<TData, TEvent>({
 	updateCache,
 	...streamOptions
 }: UseStreamInvalidationOptions<TData, TEvent>): UseAutoReconnectStreamReturn {
+	// Get QueryClient - will be null during SSR if provider not available
+	// This is safe because streaming only starts client-side when enabled=true
 	const queryClient = useQueryClient();
 
 	return useAutoReconnectStream({
