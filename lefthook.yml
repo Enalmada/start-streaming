@@ -11,7 +11,7 @@ pre-commit:
 
     lint:
       glob: "**/*.{js,ts,cjs,mjs,jsx,tsx,json}"
-      run: biome check --fix --unsafe {staged_files}
+      run: bunx biome check --fix --unsafe {staged_files}
       stage_fixed: true
       fail_text: "❌ Linting errors found! Most have been auto-fixed. Please review the changes and commit again."
 

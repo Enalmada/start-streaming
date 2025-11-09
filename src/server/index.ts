@@ -4,4 +4,4 @@ export {
 	type EventBroadcaster,
 	type MemoryBroadcasterConfig,
 	type RedisBroadcasterConfig,
-} from "./events";
+} from "./events.js";
