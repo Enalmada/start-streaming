@@ -287,9 +287,117 @@ Get free Redis from [Upstash](https://upstash.com/).
 - **Efficiency**: 1 persistent connection vs ~30 requests/minute with polling
 - **Battery**: Page Visibility API integration saves battery when tab is hidden
 
-## Not Using EventSource/SSE
+## When to Use This vs Alternatives
 
-This solution uses **TanStack Start's native async generator streaming**, not EventSource/Server-Sent Events (SSE). TanStack Start handles the HTTP transport (likely using `fetch` with `ReadableStream` under the hood), providing full type safety and better integration with the TanStack ecosystem.
+### ✅ Use `@enalmada/start-streaming` if:
+
+- You're building with **TanStack Start**
+- You want **full type safety** end-to-end (server to client)
+- You need **custom reconnection logic** (exponential backoff, jitter)
+- You want **zero external dependencies**
+- You prefer **native stack integration** over external libraries
+
+### ❌ Consider alternatives if:
+
+- **Not using TanStack Start** → Use SSE libraries or WebSockets
+- **Need bi-directional communication** → Use WebSockets
+- **Need standard SSE protocol** for third-party compatibility → Use `better-sse`
+
+## Comparison with Other Solutions
+
+| Feature | @enalmada/start-streaming | SSE (better-sse) | fetch-event-source | WebSockets |
+|---------|---------------------------|------------------|-------------------|------------|
+| **Type Safety** | ✅ Full end-to-end | ⚠️ Strings only | ⚠️ Strings only | ⚠️ Partial |
+| **TanStack Integration** | ✅ Native | ⚠️ External lib | ⚠️ External lib | ❌ Complex |
+| **Auto-Reconnect** | ✅ Custom (backoff+jitter) | ⚠️ Browser default | ✅ Custom | ⚠️ Manual |
+| **Page Visibility** | ✅ Built-in | ❌ No | ✅ Yes | ❌ No |
+| **Dependencies** | ✅ Zero | ⚠️ 1 package | ⚠️ 1 package | ⚠️ Multiple |
+| **React Query Integration** | ✅ Built-in helper | ⚠️ Manual | ⚠️ Manual | ⚠️ Manual |
+| **Direction** | One-way | One-way | One-way | Bi-directional |
+| **Best For** | TanStack Start | Standard SSE | Enhanced SSE | Chat, gaming |
+
+### vs Server-Sent Events (SSE)
+
+**SSE with `better-sse`** is a solid choice if you need the standard SSE protocol:
+
+**When to use SSE instead:**
+- You need compatibility with existing SSE infrastructure
+- You're not using TanStack Start
+- You want browser-managed reconnection (less control, but simpler)
+
+**Why start-streaming is better for TanStack Start:**
+- ✅ **Type-safe**: Events are fully typed, not strings
+- ✅ **Custom reconnection**: Full control with exponential backoff and jitter
+- ✅ **Zero dependencies**: No external libraries needed
+- ✅ **React Query integration**: Built-in `useStreamInvalidation` hook
+- ✅ **Page visibility**: Automatically pauses when tab is hidden
+
+### vs fetch-event-source
+
+Microsoft's `fetch-event-source` enhances the native EventSource API with better reconnection and page visibility support.
+
+**We learned from fetch-event-source:**
+- Page Visibility API integration (battery saving)
+- Custom reconnection logic
+- Exponential backoff patterns
+
+**Why start-streaming is better:**
+- ✅ **TanStack Start native**: No need for EventSource at all
+- ✅ **Type-safe**: Full TypeScript from server to client
+- ✅ **React Query integration**: Built-in helpers
+- ✅ **Zero dependencies**: Everything included
+
+**When to use fetch-event-source instead:**
+- You need to connect to external SSE endpoints you don't control
+- You're not using TanStack Start
+
+### vs WebSockets
+
+WebSockets are excellent for **bi-directional** communication (chat, gaming, collaborative editing).
+
+**When to use WebSockets instead:**
+- You need **bi-directional** real-time communication
+- You need very low latency (<10ms)
+- You're building chat, gaming, or collaborative features
+
+**Why start-streaming is better for one-way updates:**
+- ✅ **Simpler**: No WebSocket server setup needed
+- ✅ **HTTP-based**: Works through corporate firewalls
+- ✅ **Less overhead**: No WebSocket handshake
+- ✅ **Type-safe**: Built into TanStack Start
+- ✅ **Easier to debug**: Standard HTTP tools work
+
+### vs Polling
+
+**When polling is acceptable:**
+- Updates can be delayed 2-5 seconds
+- Very simple to implement
+- You don't want any streaming infrastructure
+
+**Why start-streaming is better:**
+- ✅ **10-20x faster**: <100ms vs 0-2s latency
+- ✅ **More efficient**: 1 connection vs ~30 requests/minute
+- ✅ **Better UX**: Instant updates feel more responsive
+
+## Technical Details: Not Using EventSource/SSE
+
+This library uses **TanStack Start's native async generator streaming**, not EventSource or Server-Sent Events (SSE).
+
+**How it works:**
+- TanStack Start uses `createServerFn()` with async generators
+- Behind the scenes, it likely uses `fetch()` with `ReadableStream`
+- This provides full type safety from server to client
+- No EventSource API or SSE protocol involved
+
+**Why this matters:**
+- ✅ **Type-safe events**: Your event types are inferred automatically
+- ✅ **Better integration**: Native to TanStack Start ecosystem
+- ✅ **More control**: Custom reconnection, error handling, retry logic
+- ✅ **Cleaner API**: Async generators are more modern than EventSource listeners
+
+**References:**
+- [TanStack Start Streaming Docs](https://tanstack.com/start/latest/docs/framework/react/guide/streaming-data-from-server-functions)
+- [TanStack Query + WebSockets Pattern](https://tkdodo.eu/blog/using-web-sockets-with-react-query) (inspiration for React Query integration)
 
 ## License
 

@@ -8,7 +8,7 @@ import { defineConfig } from "astro/config";
 export default defineConfig({
 	integrations: [
 		starlight({
-			title: "npm-module-template",
+			title: "start-streaming",
 			defaultLocale: "root", // optional
 			locales: {
 				root: {
@@ -20,16 +20,20 @@ export default defineConfig({
 				{
 					icon: "github",
 					label: "GitHub",
-					href: "https://github.com/Enalmada/npm-module-template",
+					href: "https://github.com/Enalmada/start-streaming",
 				},
 			],
 			sidebar: [
 				{
-					label: "Getting Started",
+					label: "Guides",
 					items: [
 						{
 							label: "Getting Started",
 							link: "/guides/getting-started/",
+						},
+						{
+							label: "Technology Comparison",
+							link: "/guides/comparison/",
 						},
 						{
 							label: "Deploy Website",
