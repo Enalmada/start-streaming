@@ -151,6 +151,8 @@ Full documentation available at: https://start-streaming.vercel.app
 ### Key Concepts
 
 - [Getting Started](https://start-streaming.vercel.app/guides/getting-started)
+- [Technology Comparison](https://start-streaming.vercel.app/guides/comparison) - When to use this vs alternatives
+- [Technical Architecture](https://start-streaming.vercel.app/technologies/architecture) - How it works under the hood
 - [React Query Integration](https://start-streaming.vercel.app/guides/react-query)
 - [Event Broadcasting](https://start-streaming.vercel.app/guides/event-broadcasting)
 - [Production Deployment](https://start-streaming.vercel.app/guides/production)
@@ -379,25 +381,74 @@ WebSockets are excellent for **bi-directional** communication (chat, gaming, col
 - ✅ **More efficient**: 1 connection vs ~30 requests/minute
 - ✅ **Better UX**: Instant updates feel more responsive
 
-## Technical Details: Not Using EventSource/SSE
+## Technical Details: How It Works Under The Hood
 
 This library uses **TanStack Start's native async generator streaming**, not EventSource or Server-Sent Events (SSE).
 
-**How it works:**
-- TanStack Start uses `createServerFn()` with async generators
-- Behind the scenes, it likely uses `fetch()` with `ReadableStream`
-- This provides full type safety from server to client
-- No EventSource API or SSE protocol involved
+### The Technology Stack
 
-**Why this matters:**
-- ✅ **Type-safe events**: Your event types are inferred automatically
+**HTTP Transport:**
+- Native `fetch()` API with `ReadableStream`
+- NDJSON format (Newline-Delimited JSON): each line is a complete JSON object separated by `\n`
+- Headers: `Accept: application/x-ndjson, application/json`
+- Content-Type: `application/x-ndjson` for streaming responses
+
+**Serialization:**
+- [Seroval](https://github.com/lxsmnsyc/seroval) library handles type detection and serialization
+- Automatically detects async generators via `toCrossJSONStream()`
+- Preserves JavaScript types (Date, Error, Map, Set) across the wire
+- Handles circular references
+
+**Architecture Pattern:**
+- **Fire-and-forget**: First NDJSON line returned synchronously, remaining lines processed asynchronously in background
+- Server creates `ReadableStream` when async generator detected
+- Client uses `TextDecoderStream` to convert bytes to text
+- Each line parsed as separate JSON object and deserialized
+
+### Example Flow
+
+```typescript
+// 1. You write this server function:
+export const getData = createServerFn().handler(async function* () {
+  yield { status: 'loading' }
+  const data = await fetch()
+  yield data
+})
+
+// 2. TanStack Router detects async generator and creates ReadableStream
+// 3. Each yield becomes one NDJSON line:
+//    {"status":"loading"}\n
+//    {"id":1,"name":"Alice"}\n
+
+// 4. Client calls function:
+const result = await getData()
+// result = { status: 'loading' } (first yield returned immediately)
+// remaining values processed asynchronously in background
+```
+
+### Why This Matters
+
+- ✅ **Type-safe events**: Your event types are inferred automatically (Seroval preserves types)
 - ✅ **Better integration**: Native to TanStack Start ecosystem
 - ✅ **More control**: Custom reconnection, error handling, retry logic
 - ✅ **Cleaner API**: Async generators are more modern than EventSource listeners
+- ✅ **Better performance**: Fire-and-forget pattern means instant first response
+
+### Key Differences from SSE
+
+| Feature | start-streaming (NDJSON) | Server-Sent Events (SSE) |
+|---------|--------------------------|--------------------------|
+| Protocol | HTTP with ReadableStream | SSE protocol |
+| Format | NDJSON (JSON per line) | text/event-stream |
+| Type Safety | ✅ Full (Seroval) | ❌ Strings only |
+| Library | Native to TanStack Start | Requires EventSource API |
+| Reconnection | Custom (you control) | Browser-controlled |
 
 **References:**
 - [TanStack Start Streaming Docs](https://tanstack.com/start/latest/docs/framework/react/guide/streaming-data-from-server-functions)
-- [TanStack Query + WebSockets Pattern](https://tkdodo.eu/blog/using-web-sockets-with-react-query) (inspiration for React Query integration)
+- [Seroval Library](https://github.com/lxsmnsyc/seroval) - Serialization powering the type safety
+- [TanStack Query + WebSockets Pattern](https://tkdodo.eu/blog/using-web-sockets-with-react-query) - Inspiration for React Query integration
+- [NDJSON Specification](http://ndjson.org/) - Data format used for streaming
 
 ## License
 

@@ -49,6 +49,10 @@ export default defineConfig({
 							link: "/technologies/summary/",
 						},
 						{
+							label: "Architecture",
+							link: "/technologies/architecture/",
+						},
+						{
 							label: "Build",
 							link: "/technologies/build/",
 						},
