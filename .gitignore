@@ -1,0 +1,19 @@
+node_modules
+.vscode
+yarn-error.log
+.yarn
+.next
+.idea
+.env
+lib
+dist
+tmp
+package-lock.json
+.vercel
+.codebuddy
+
+# Turbo
+.turbo/
+
+# Session docs (temporary working notes)
+docs/session/
