@@ -39,13 +39,18 @@ import { useSSEConnection } from "./useSSEConnection.js";
 export function useSSEQueryInvalidation<TEvent extends SSEEvent>(options: QueryInvalidationOptions<TEvent>) {
 	const { endpoint, queryKeys, onConnectionChange, onError, enabled = true } = options;
 
+	// SSR-safe: disable during server-side rendering
+	const isClient = typeof window !== "undefined";
 	const queryClient = useQueryClient();
 
 	// Build connection options with proper optional handling
 	const connectionOptions: SSEConnectionOptions<TEvent> = {
 		endpoint,
-		enabled,
+		enabled: enabled && isClient, // Only enable on client-side
 		onEvent: (event) => {
+			// Guard against SSR (shouldn't happen due to enabled check, but defensive)
+			if (!isClient) return;
+
 			// Get query keys to invalidate
 			const keysToInvalidate = typeof queryKeys === "function" ? queryKeys(event) : queryKeys;
 
