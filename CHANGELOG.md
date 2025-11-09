@@ -1,5 +1,34 @@
 # Changelog
 
+## 2.0.0
+
+### Major Changes
+
+- e16e768: v2.0.0: Complete rewrite using better-sse for standards-compliant SSE
+
+  **Breaking Changes:**
+
+  - Completely new architecture based on better-sse instead of async generators
+  - `useStreamInvalidation` → `useSSEQueryInvalidation` (renamed hook)
+  - `createServerFn()` approach replaced with SSE route handlers
+  - Requires better-sse as peer dependency: `bun add better-sse`
+  - Server implementation now uses `createSSERouteHandler` and channel managers
+  - Different event publishing pattern (channel-based broadcasting)
+
+  **New Features:**
+
+  - Standards-compliant Server-Sent Events (EventSource API)
+  - Built-in auto-reconnection via browser EventSource
+  - Channel-based broadcasting for efficient multi-client updates
+  - SSR-safe hooks with client-side checks
+  - beforeunload cleanup to reduce console noise during page reloads
+  - Memory management with automatic channel cleanup
+  - Production-ready for multi-server deployment (Redis pub/sub ready)
+
+  **Migration Required:**
+
+  See README.md for complete migration guide from v1 to v2. The two versions are architecturally incompatible and require code changes.
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
@@ -53,6 +82,7 @@ Complete architectural redesign from custom async generators to standards-compli
 v1 and v2 are completely different architectures. To migrate:
 
 1. **Server-side:**
+
    ```typescript
    // v1
    export const broadcaster = createEventBroadcaster({ ... });
@@ -62,40 +92,43 @@ v1 and v2 are completely different architectures. To migrate:
    ```
 
 2. **Routes:**
+
    ```typescript
    // v1 - Async generator server function
-   export const watchComments = createServerFn({ method: 'POST' })
-     .handler(async function* ({ data }) {
+   export const watchComments = createServerFn({ method: "POST" }).handler(
+     async function* ({ data }) {
        for await (const event of subscribeToComments(data.id)) {
          yield event;
        }
-     });
+     }
+   );
 
    // v2 - SSE route handler
-   export const Route = createFileRoute('/api/sse/comments/$id' as any)({
+   export const Route = createFileRoute("/api/sse/comments/$id" as any)({
      server: {
        handlers: {
          GET: createSSERouteHandler({
-           getChannel: (params) => commentChannels.getChannel(params.id)
-         })
-       }
-     }
+           getChannel: (params) => commentChannels.getChannel(params.id),
+         }),
+       },
+     },
    });
    ```
 
 3. **Client-side:**
+
    ```typescript
    // v1
    useStreamInvalidation({
      serverFn: watchComments,
      input: { id: discussionId },
-     queryKeys: [['comments', discussionId]]
+     queryKeys: [["comments", discussionId]],
    });
 
    // v2
    useSSEQueryInvalidation({
      endpoint: `/api/sse/comments/${discussionId}`,
-     queryKeys: [['comments', discussionId]]
+     queryKeys: [["comments", discussionId]],
    });
    ```
 
