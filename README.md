@@ -1,46 +1,40 @@
 # @enalmada/start-streaming
 
-Production-ready real-time streaming infrastructure for TanStack Start. Type-safe async generator streaming with auto-reconnection, exponential backoff, React Query integration, and page visibility API. <100ms latency, zero runtime dependencies.
+> Production-ready Server-Sent Events (SSE) for TanStack Start
 
 [![npm version](https://badge.fury.io/js/@enalmada%2Fstart-streaming.svg)](https://www.npmjs.com/package/@enalmada/start-streaming)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Features
+## Why v2?
 
-- ✅ **Auto-reconnection** with exponential backoff and jitter
-- ✅ **Page Visibility API** integration (pause when tab is hidden)
-- ✅ **Full TypeScript** type safety end-to-end
-- ✅ **React Query** integration out of the box
-- ✅ **Production-ready** error handling
-- ✅ **Zero runtime dependencies** (uses TanStack Start native streaming)
-- ✅ **EventEmitter** for development, **Redis** ready for production
+**v1** attempted a custom TanStack Start native streaming solution using async generators. While functional, it had reliability issues and didn't leverage browser-native APIs.
+
+**v2** uses [better-sse](https://github.com/MatthewWid/better-sse) (standards-compliant SSE) with thin TanStack Start/Query wrappers. This provides:
+
+✅ **Standards-compliant** - Uses browser-native EventSource API
+✅ **Auto-reconnection** - Built into EventSource, no custom logic
+✅ **Type-safe** - Full TypeScript support end-to-end
+✅ **Zero lock-in** - Just better-sse + helpers, easy to customize
+✅ **TanStack Query integration** - Auto-invalidate queries on events
+✅ **Production-ready** - Scalable to multi-server with Redis pub/sub
 
 ## Installation
 
 ```bash
-bun add @enalmada/start-streaming
+bun add @enalmada/start-streaming better-sse
 # or
-npm install @enalmada/start-streaming
+npm install @enalmada/start-streaming better-sse
 # or
-pnpm add @enalmada/start-streaming
+pnpm add @enalmada/start-streaming better-sse
 ```
 
 ## Quick Start
 
-### 1. Create Event Broadcaster (Server)
+### 1. Define Your Event Type
 
 ```typescript
-// src/server/lib/events.ts
-import { createEventBroadcaster } from '@enalmada/start-streaming/server';
-
-export const broadcaster = createEventBroadcaster({
-  type: process.env.NODE_ENV === 'production' ? 'redis' : 'memory',
-  // For production:
-  // redis: {
-  //   url: process.env.UPSTASH_REDIS_URL!,
-  //   token: process.env.UPSTASH_REDIS_TOKEN!,
-  // }
-});
+// src/server/lib/comment-events.ts
+import { createSSEChannelManager } from '@enalmada/start-streaming/server';
 
 // Define your domain-specific event type
 export type CommentEvent = {
@@ -50,420 +44,368 @@ export type CommentEvent = {
   timestamp: number;
 };
 
-// Domain-specific functions
-export async function* subscribeToCommentEvents(discussionId: string) {
-  const channel = `discussion:${discussionId}:comments`;
-  yield* broadcaster.subscribe<CommentEvent>(channel);
-}
+// Create channel manager
+export const commentChannels = createSSEChannelManager<CommentEvent>({
+  keyPrefix: 'discussion',
+  keySuffix: 'comments'
+});
+```
 
-export function publishCommentEvent(discussionId: string, commentCount: number) {
-  const event: CommentEvent = {
+### 2. Create SSE Route (Server)
+
+```typescript
+// src/routes/api/sse/comments.$discussionId.ts
+import { createFileRoute } from '@tanstack/react-router';
+import { createSSERouteHandler } from '@enalmada/start-streaming/server';
+import { commentChannels } from '~/server/lib/comment-events';
+
+export const Route = createFileRoute('/api/sse/comments/$discussionId' as any)({
+  server: {
+    handlers: {
+      GET: createSSERouteHandler({
+        getChannel: (params) => commentChannels.getChannel(params.discussionId),
+        validateParams: (params) => !!params.discussionId,
+        getInitialEvent: (params) => ({
+          type: 'comment-added' as const,
+          discussionId: params.discussionId,
+          commentCount: 0,
+          timestamp: Date.now()
+        }),
+        onDisconnect: (params) => {
+          commentChannels.cleanupIfEmpty(params.discussionId);
+        }
+      })
+    }
+  }
+});
+```
+
+### 3. Publish Events (Server)
+
+```typescript
+// src/server/services/createComments.ts
+import { commentChannels } from '~/server/lib/comment-events';
+
+export async function createComment(discussionId: string) {
+  // ... create comment in database ...
+
+  // Get updated count
+  const commentCount = await getCommentCount(discussionId);
+
+  // Publish event to all connected clients
+  commentChannels.publish(discussionId, {
     type: 'comment-added',
     discussionId,
     commentCount,
     timestamp: Date.now()
-  };
-  broadcaster.publish(`discussion:${discussionId}:comments`, event);
+  });
 }
 ```
 
-### 2. Create Server Function (Server)
+### 4. Connect from Client
 
-```typescript
-// src/server/functions/watchComments.ts
-import { createServerFn } from '@tanstack/react-start';
-import { subscribeToCommentEvents } from '../lib/events';
-
-function validateInput(data: unknown): { discussionId: string } {
-  if (!data || typeof data !== 'object') throw new Error('Invalid input');
-  const { discussionId } = data as Record<string, unknown>;
-  if (typeof discussionId !== 'string') throw new Error('discussionId required');
-  return { discussionId };
-}
-
-async function* handleWatchComments({ data }: { data: { discussionId: string } }) {
-  const subscription = subscribeToCommentEvents(data.discussionId);
-  for await (const event of subscription) {
-    yield event;
-  }
-}
-
-export const watchComments = createServerFn({ method: 'POST' })
-  .inputValidator(validateInput)
-  .handler(handleWatchComments);
-```
-
-### 3. Use in Component (Client)
+**Option A: With TanStack Query Integration**
 
 ```typescript
 // src/components/DiscussionView.tsx
-import { useStreamInvalidation } from '@enalmada/start-streaming/client';
-import { watchComments } from '~/server/functions/watchComments';
+import { useQueryClient } from '@tanstack/react-query';
+import { useSSEQueryInvalidation } from '@enalmada/start-streaming/client';
 
-export function DiscussionView({ discussionId }) {
-  const queryClient = useQueryClient();
-
-  // Set up real-time streaming
-  useStreamInvalidation({
-    streamFn: (params) => watchComments({ data: params }),
-    params: { discussionId },
-    pauseOnHidden: true, // Save battery when tab is hidden
-
-    // Invalidate queries when new events arrive
-    invalidate: async (event, qc) => {
-      await qc.invalidateQueries({ queryKey: ['comments', discussionId] });
-      await qc.invalidateQueries({ queryKey: ['counts', discussionId] });
-    },
-
-    maxRetries: 10,
-    baseDelay: 1000,
-    maxDelay: 30000,
+export function DiscussionView({ discussionId }: Props) {
+  // Auto-invalidate queries when events arrive
+  useSSEQueryInvalidation({
+    endpoint: `/api/sse/comments/${discussionId}`,
+    queryKeys: [
+      ['infiniteComments', discussionId],
+      ['discussion', 'counts', discussionId]
+    ]
   });
 
-  // Your component JSX...
+  // Your component renders normally
+  // Queries auto-refetch when SSE events arrive
 }
 ```
 
-### 4. Publish Events (Server)
+**Option B: With Custom Handler**
 
 ```typescript
-// Wherever you create comments
-import { publishCommentEvent } from '~/server/lib/events';
+import { useSSEConnection } from '@enalmada/start-streaming/client';
 
-async function createComment(discussionId: string, content: string) {
-  // Save comment to database
-  await db.insert(comments).values({ discussionId, content });
+export function DiscussionView({ discussionId }: Props) {
+  const { connected } = useSSEConnection({
+    endpoint: `/api/sse/comments/${discussionId}`,
+    onEvent: (event) => {
+      console.log('New comment!', event);
+      // Handle event however you want
+    },
+    onConnectionChange: (connected) => {
+      console.log('SSE', connected ? 'connected' : 'disconnected');
+    }
+  });
 
-  // Get updated count
-  const count = await db.select({ count: count() })
-    .from(comments)
-    .where(eq(comments.discussionId, discussionId));
-
-  // Publish event to all subscribers
-  publishCommentEvent(discussionId, count[0].count);
+  return <div>Status: {connected ? '🟢' : '🔴'}</div>;
 }
 ```
 
-## Documentation
-
-Full documentation available at: https://start-streaming.vercel.app
-
-### Key Concepts
-
-- [Getting Started](https://start-streaming.vercel.app/guides/getting-started)
-- [Technology Comparison](https://start-streaming.vercel.app/guides/comparison) - When to use this vs alternatives
-- [Technical Architecture](https://start-streaming.vercel.app/technologies/architecture) - How it works under the hood
-- [React Query Integration](https://start-streaming.vercel.app/guides/react-query)
-- [Event Broadcasting](https://start-streaming.vercel.app/guides/event-broadcasting)
-- [Production Deployment](https://start-streaming.vercel.app/guides/production)
-
-## API Overview
-
-### Client Exports
+**Option C: Dynamic Query Keys**
 
 ```typescript
-import {
-  // Hooks
-  useAutoReconnectStream,
-  useStreamInvalidation,
-  usePageVisibility,
-
-  // Types
-  UseAutoReconnectStreamOptions,
-  UseAutoReconnectStreamReturn,
-  UseStreamInvalidationOptions,
-} from '@enalmada/start-streaming/client';
-```
-
-### Server Exports
-
-```typescript
-import {
-  // Factory
-  createEventBroadcaster,
-
-  // Types
-  EventBroadcaster,
-  BroadcasterConfig,
-  MemoryBroadcasterConfig,
-  RedisBroadcasterConfig,
-} from '@enalmada/start-streaming/server';
-```
-
-### Utility Exports
-
-```typescript
-import {
-  calculateBackoff,
-  addJitter,
-  calculateBackoffWithJitter,
-} from '@enalmada/start-streaming/utils';
+useSSEQueryInvalidation({
+  endpoint: `/api/sse/comments/${discussionId}`,
+  // Function receives event, returns keys to invalidate
+  queryKeys: (event) => [
+    ['infiniteComments', event.discussionId],
+    ['discussion', 'counts', event.discussionId]
+  ]
+});
 ```
 
 ## Architecture
 
+### Channel-Based Broadcasting
+
 ```
-┌─────────────────────────────────────────┐
-│     Client Component                     │
-│  (useStreamInvalidation hook)            │
-└─────────────────────────────────────────┘
-                 ↓
-┌─────────────────────────────────────────┐
-│     TanStack Server Function             │
-│  (watchComments - async generator)      │
-└─────────────────────────────────────────┘
-                 ↓
-┌─────────────────────────────────────────┐
-│     Event Broadcasting                   │
-│  (EventEmitter / Redis Pub/Sub)          │
-└─────────────────────────────────────────┘
-                 ↓
-┌─────────────────────────────────────────┐
-│     Your Service Layer                   │
-│  (publishes events on data changes)      │
-└─────────────────────────────────────────┘
+AI generates comments
+  ↓
+publishEvent('discussion-123', event)
+  ↓
+Channel broadcasts to all sessions
+  ↓
+[SSE → Client 1, Client 2, Client 3, ...]
+  ↓
+EventSource.onmessage fires
+  ↓
+Query invalidation or custom handler
+  ↓
+UI auto-updates
 ```
 
-## Features in Detail
+### Memory Management
 
-### Auto-Reconnection
-
-Automatically reconnects with exponential backoff and jitter to prevent thundering herd:
-
-- Attempt 0: ~1s delay
-- Attempt 1: ~2s delay
-- Attempt 2: ~4s delay
-- Max: 30s delay (configurable)
-
-Jitter (±25%) prevents all clients from reconnecting simultaneously.
-
-### Page Visibility Integration
-
-Automatically pauses streaming when the browser tab is hidden and resumes when visible:
-
-- Saves battery on mobile devices
-- Reduces server load
-- Improves performance
-
-### Connection State
+Channels are automatically cleaned up when all sessions disconnect:
 
 ```typescript
-const stream = useStreamInvalidation({...});
-
-stream.isConnected      // boolean
-stream.isReconnecting   // boolean
-stream.reconnectAttempt // number
-stream.error            // Error | null
-stream.reconnect()      // Manual reconnect function
+// Built-in cleanup on disconnect
+onDisconnect: (params) => {
+  commentChannels.cleanupIfEmpty(params.discussionId);
+}
 ```
 
-### Type Safety
+## Advanced Usage
 
-Full end-to-end type safety from server to client. Your event types are inferred automatically.
-
-## Production Deployment
-
-### Redis Setup (Multi-Server)
-
-For production deployments with multiple servers, switch to Redis:
+### Multiple Event Types per Channel
 
 ```typescript
-// Install Redis client
-bun add @upstash/redis
+type DiscussionEvent =
+  | { type: 'comment-added'; commentCount: number; timestamp: number }
+  | { type: 'vote-changed'; votes: { yes: number; no: number }; timestamp: number }
+  | { type: 'discussion-closed'; timestamp: number };
 
-// Configure broadcaster
-import { createEventBroadcaster } from '@enalmada/start-streaming/server';
+const discussionChannels = createSSEChannelManager<DiscussionEvent>({
+  keyPrefix: 'discussion',
+  keySuffix: 'events'
+});
 
-export const broadcaster = createEventBroadcaster({
-  type: 'redis',
-  url: process.env.UPSTASH_REDIS_URL!,
-  token: process.env.UPSTASH_REDIS_TOKEN!,
+// Client can handle different event types
+useSSEConnection({
+  endpoint: `/api/sse/discussion/${id}`,
+  onEvent: (event) => {
+    switch (event.type) {
+      case 'comment-added':
+        // Handle comment
+        break;
+      case 'vote-changed':
+        // Handle vote
+        break;
+      case 'discussion-closed':
+        // Handle closure
+        break;
+    }
+  }
 });
 ```
 
-Get free Redis from [Upstash](https://upstash.com/).
-
-## Performance
-
-- **Latency**: <100ms from server event to client update (vs 0-2s with polling)
-- **Efficiency**: 1 persistent connection vs ~30 requests/minute with polling
-- **Battery**: Page Visibility API integration saves battery when tab is hidden
-
-## When to Use This vs Alternatives
-
-### ✅ Use `@enalmada/start-streaming` if:
-
-- You're building with **TanStack Start**
-- You want **full type safety** end-to-end (server to client)
-- You need **custom reconnection logic** (exponential backoff, jitter)
-- You want **zero external dependencies**
-- You prefer **native stack integration** over external libraries
-
-### ❌ Consider alternatives if:
-
-- **Not using TanStack Start** → Use SSE libraries or WebSockets
-- **Need bi-directional communication** → Use WebSockets
-- **Need standard SSE protocol** for third-party compatibility → Use `better-sse`
-
-## Comparison with Other Solutions
-
-| Feature | @enalmada/start-streaming | SSE (better-sse) | fetch-event-source | WebSockets |
-|---------|---------------------------|------------------|-------------------|------------|
-| **Type Safety** | ✅ Full end-to-end | ⚠️ Strings only | ⚠️ Strings only | ⚠️ Partial |
-| **TanStack Integration** | ✅ Native | ⚠️ External lib | ⚠️ External lib | ❌ Complex |
-| **Auto-Reconnect** | ✅ Custom (backoff+jitter) | ⚠️ Browser default | ✅ Custom | ⚠️ Manual |
-| **Page Visibility** | ✅ Built-in | ❌ No | ✅ Yes | ❌ No |
-| **Dependencies** | ✅ Zero | ⚠️ 1 package | ⚠️ 1 package | ⚠️ Multiple |
-| **React Query Integration** | ✅ Built-in helper | ⚠️ Manual | ⚠️ Manual | ⚠️ Manual |
-| **Direction** | One-way | One-way | One-way | Bi-directional |
-| **Best For** | TanStack Start | Standard SSE | Enhanced SSE | Chat, gaming |
-
-### vs Server-Sent Events (SSE)
-
-**SSE with `better-sse`** is a solid choice if you need the standard SSE protocol:
-
-**When to use SSE instead:**
-- You need compatibility with existing SSE infrastructure
-- You're not using TanStack Start
-- You want browser-managed reconnection (less control, but simpler)
-
-**Why start-streaming is better for TanStack Start:**
-- ✅ **Type-safe**: Events are fully typed, not strings
-- ✅ **Custom reconnection**: Full control with exponential backoff and jitter
-- ✅ **Zero dependencies**: No external libraries needed
-- ✅ **React Query integration**: Built-in `useStreamInvalidation` hook
-- ✅ **Page visibility**: Automatically pauses when tab is hidden
-
-### vs fetch-event-source
-
-Microsoft's `fetch-event-source` enhances the native EventSource API with better reconnection and page visibility support.
-
-**We learned from fetch-event-source:**
-- Page Visibility API integration (battery saving)
-- Custom reconnection logic
-- Exponential backoff patterns
-
-**Why start-streaming is better:**
-- ✅ **TanStack Start native**: No need for EventSource at all
-- ✅ **Type-safe**: Full TypeScript from server to client
-- ✅ **React Query integration**: Built-in helpers
-- ✅ **Zero dependencies**: Everything included
-
-**When to use fetch-event-source instead:**
-- You need to connect to external SSE endpoints you don't control
-- You're not using TanStack Start
-
-### vs WebSockets
-
-WebSockets are excellent for **bi-directional** communication (chat, gaming, collaborative editing).
-
-**When to use WebSockets instead:**
-- You need **bi-directional** real-time communication
-- You need very low latency (<10ms)
-- You're building chat, gaming, or collaborative features
-
-**Why start-streaming is better for one-way updates:**
-- ✅ **Simpler**: No WebSocket server setup needed
-- ✅ **HTTP-based**: Works through corporate firewalls
-- ✅ **Less overhead**: No WebSocket handshake
-- ✅ **Type-safe**: Built into TanStack Start
-- ✅ **Easier to debug**: Standard HTTP tools work
-
-### vs Polling
-
-**When polling is acceptable:**
-- Updates can be delayed 2-5 seconds
-- Very simple to implement
-- You don't want any streaming infrastructure
-
-**Why start-streaming is better:**
-- ✅ **10-20x faster**: <100ms vs 0-2s latency
-- ✅ **More efficient**: 1 connection vs ~30 requests/minute
-- ✅ **Better UX**: Instant updates feel more responsive
-
-## Technical Details: How It Works Under The Hood
-
-This library uses **TanStack Start's native async generator streaming**, not EventSource or Server-Sent Events (SSE).
-
-### The Technology Stack
-
-**HTTP Transport:**
-- Native `fetch()` API with `ReadableStream`
-- NDJSON format (Newline-Delimited JSON): each line is a complete JSON object separated by `\n`
-- Headers: `Accept: application/x-ndjson, application/json`
-- Content-Type: `application/x-ndjson` for streaming responses
-
-**Serialization:**
-- [Seroval](https://github.com/lxsmnsyc/seroval) library handles type detection and serialization
-- Automatically detects async generators via `toCrossJSONStream()`
-- Preserves JavaScript types (Date, Error, Map, Set) across the wire
-- Handles circular references
-
-**Architecture Pattern:**
-- **Fire-and-forget**: First NDJSON line returned synchronously, remaining lines processed asynchronously in background
-- Server creates `ReadableStream` when async generator detected
-- Client uses `TextDecoderStream` to convert bytes to text
-- Each line parsed as separate JSON object and deserialized
-
-### Example Flow
+### Conditional Connection
 
 ```typescript
-// 1. You write this server function:
-export const getData = createServerFn().handler(async function* () {
-  yield { status: 'loading' }
-  const data = await fetch()
-  yield data
-})
+// Only connect when user is authenticated
+const { user } = useAuth();
 
-// 2. TanStack Router detects async generator and creates ReadableStream
-// 3. Each yield becomes one NDJSON line:
-//    {"status":"loading"}\n
-//    {"id":1,"name":"Alice"}\n
-
-// 4. Client calls function:
-const result = await getData()
-// result = { status: 'loading' } (first yield returned immediately)
-// remaining values processed asynchronously in background
+useSSEQueryInvalidation({
+  endpoint: `/api/sse/comments/${discussionId}`,
+  queryKeys: [['comments', discussionId]],
+  enabled: !!user  // Only connect if logged in
+});
 ```
 
-### Why This Matters
+### Session Count Monitoring
 
-- ✅ **Type-safe events**: Your event types are inferred automatically (Seroval preserves types)
-- ✅ **Better integration**: Native to TanStack Start ecosystem
-- ✅ **More control**: Custom reconnection, error handling, retry logic
-- ✅ **Cleaner API**: Async generators are more modern than EventSource listeners
-- ✅ **Better performance**: Fire-and-forget pattern means instant first response
+```typescript
+// Get active connection count for a resource
+const sessionCount = commentChannels.getSessionCount('discussion-123');
+console.log(`${sessionCount} users watching this discussion`);
+```
 
-### Key Differences from SSE
+## Production Deployment
 
-| Feature | start-streaming (NDJSON) | Server-Sent Events (SSE) |
-|---------|--------------------------|--------------------------|
-| Protocol | HTTP with ReadableStream | SSE protocol |
-| Format | NDJSON (JSON per line) | text/event-stream |
-| Type Safety | ✅ Full (Seroval) | ❌ Strings only |
-| Library | Native to TanStack Start | Requires EventSource API |
-| Reconnection | Custom (you control) | Browser-controlled |
+### Single Server (Current Implementation)
 
-**References:**
-- [TanStack Start Streaming Docs](https://tanstack.com/start/latest/docs/framework/react/guide/streaming-data-from-server-functions)
-- [Seroval Library](https://github.com/lxsmnsyc/seroval) - Serialization powering the type safety
-- [TanStack Query + WebSockets Pattern](https://tkdodo.eu/blog/using-web-sockets-with-react-query) - Inspiration for React Query integration
-- [NDJSON Specification](http://ndjson.org/) - Data format used for streaming
+Works out of the box with in-memory channels. Perfect for:
+- Development
+- Single-server deployments
+- Serverless with sticky sessions
+
+### Multi-Server (Redis Pub/Sub)
+
+For horizontal scaling across multiple servers, you'll need to add Redis pub/sub. The channel manager is designed to make this transition easy:
+
+**Future Implementation Pattern:**
+
+```typescript
+import { Redis } from '@upstash/redis';
+
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_URL!,
+  token: process.env.UPSTASH_REDIS_TOKEN!
+});
+
+// In your publish function:
+export function publishCommentEvent(discussionId: string, event: CommentEvent) {
+  // 1. Broadcast to local in-memory channel (current server's connections)
+  const channel = commentChannels.getChannel(discussionId);
+  channel.broadcast(event, 'message');
+
+  // 2. Publish to Redis (for other servers' connections)
+  await redis.publish(
+    `discussion:${discussionId}:comments`,
+    JSON.stringify(event)
+  );
+}
+
+// On each server, subscribe to Redis:
+const subscriber = redis.duplicate();
+await subscriber.subscribe('discussion:*:comments', (message, channel) => {
+  const event = JSON.parse(message) as CommentEvent;
+  const discussionId = channel.split(':')[1];
+
+  // Broadcast to this server's local connections
+  const localChannel = commentChannels.getChannel(discussionId);
+  localChannel.broadcast(event, 'message');
+});
+```
+
+## API Reference
+
+### Server
+
+#### `createSSEChannelManager<TEvent>(config)`
+
+Creates a channel manager for broadcasting events.
+
+**Parameters:**
+- `config.keyPrefix` (optional): Prefix for channel keys (e.g., "discussion")
+- `config.keySuffix` (optional): Suffix for channel keys (e.g., "comments")
+
+**Returns:** `ChannelManager<TEvent>`
+
+**Methods:**
+- `getChannel(resourceId)`: Get or create channel for resource
+- `publish(resourceId, event)`: Broadcast event to all sessions
+- `getSessionCount(resourceId)`: Get active connection count
+- `cleanupIfEmpty(resourceId)`: Remove channel if no sessions
+
+#### `createSSERouteHandler(config)`
+
+Creates an SSE route handler for TanStack Start.
+
+**Parameters:**
+- `config.getChannel(params)`: Function that returns the channel
+- `config.validateParams(params)` (optional): Validate route params
+- `config.getInitialEvent(params)` (optional): Send initial event on connect
+- `config.onDisconnect(params)` (optional): Cleanup when client disconnects
+
+**Returns:** Route handler function
+
+### Client
+
+#### `useSSEConnection(options)`
+
+Basic SSE connection hook.
+
+**Parameters:**
+- `options.endpoint`: SSE endpoint URL
+- `options.onEvent`: Callback when event received
+- `options.onConnectionChange` (optional): Connection state callback
+- `options.onError` (optional): Error callback
+- `options.enabled` (optional): Whether to connect (default: true)
+
+**Returns:** `{ connected: boolean }`
+
+#### `useSSEQueryInvalidation(options)`
+
+TanStack Query integration hook.
+
+**Parameters:**
+- `options.endpoint`: SSE endpoint URL
+- `options.queryKeys`: Keys to invalidate (array or function)
+- `options.onConnectionChange` (optional): Connection state callback
+- `options.onError` (optional): Error callback
+- `options.enabled` (optional): Whether to connect (default: true)
+
+**Returns:** `{ connected: boolean }`
+
+## Comparison: v1 vs v2
+
+| Feature | v1 (Async Generators) | v2 (better-sse) |
+|---------|----------------------|-----------------|
+| **Protocol** | Custom NDJSON | Standards-compliant SSE |
+| **Browser API** | Custom fetch stream | Native EventSource |
+| **Reconnection** | Custom logic | Built into EventSource |
+| **Type Safety** | ✓ | ✓ |
+| **TanStack Query** | ✓ | ✓ |
+| **Complexity** | High | Low |
+| **Reliability** | Issues | Production-proven |
+| **Bundle Size** | ~3KB | ~5KB (better-sse) |
+
+## Why EventSource Over WebSockets?
+
+1. **Simpler**: Unidirectional server→client (perfect for notifications)
+2. **Auto-reconnects**: Built into the browser API
+3. **HTTP/2 friendly**: Works over standard HTTP
+4. **Firewall friendly**: Just HTTP, no special protocols
+5. **Fallback ready**: Gracefully degrades
+
+If you need bidirectional communication, use WebSockets. For server→client updates (notifications, live data), SSE is perfect.
+
+## Examples
+
+See the source repository for complete examples:
+- Comment system with real-time updates
+- Live vote counts
+- Presence indicators ("5 users viewing")
+
+## Migration from v1
+
+v1 and v2 are **completely different architectures**. To migrate:
+
+1. Replace async generator server functions with SSE routes
+2. Replace `useStreamInvalidation` with `useSSEQueryInvalidation`
+3. Update event publishing to use channel manager
+
+See `v1-deprecated` branch for old implementation.
+
+## Contributing
+
+PRs welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
 MIT © [Adam Lane](https://github.com/Enalmada)
 
-## Contributing
+## Links
 
-Contributions welcome! Please read the [contributing guidelines](CONTRIBUTING.md) first.
-
-## Example Implementation
-
-See **[TanStarter](https://github.com/Enalmada/tanstarter)** for a complete working example of `@enalmada/start-streaming` in a production TanStack Start application.
-
-## Support
-
-- [Documentation](https://start-streaming.vercel.app)
-- [GitHub Issues](https://github.com/Enalmada/start-streaming/issues)
-- [Discussions](https://github.com/Enalmada/start-streaming/discussions)
+- [GitHub](https://github.com/Enalmada/start-streaming)
+- [npm](https://www.npmjs.com/package/@enalmada/start-streaming)
+- [better-sse](https://github.com/MatthewWid/better-sse)
+- [TanStack Start](https://tanstack.com/start)
+- [TanStack Query](https://tanstack.com/query)

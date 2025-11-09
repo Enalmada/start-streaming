@@ -1,38 +1,27 @@
 /**
  * @enalmada/start-streaming
  *
- * Production-ready real-time streaming for TanStack Start with auto-reconnection,
- * exponential backoff, React Query integration, and page visibility API.
+ * Production-ready Server-Sent Events (SSE) for TanStack Start
  *
- * @see https://github.com/Enalmada/start-streaming
+ * @packageDocumentation
  */
 
-// Client exports (React hooks and integrations)
 export {
-	type UseAutoReconnectStreamOptions,
-	type UseAutoReconnectStreamReturn,
-	useAutoReconnectStream,
-	usePageVisibility,
-} from "./client/hooks";
-
+	useSSEConnection,
+	useSSEQueryInvalidation,
+} from "./client/index.js";
+// Root exports for convenience
+// Users can also import from /server or /client subpaths
 export {
-	type UseStreamInvalidationOptions,
-	useStreamInvalidation,
-} from "./client/integrations";
-
-// Server exports (event broadcasting)
-export {
-	type BroadcasterConfig,
-	createEventBroadcaster,
-	type EventBroadcaster,
-	type MemoryBroadcasterConfig,
-	type RedisBroadcasterConfig,
-} from "./server";
-// Type exports
-export type { StreamEvent } from "./types";
-// Utility exports
-export {
-	addJitter,
-	calculateBackoff,
-	calculateBackoffWithJitter,
-} from "./utils";
+	createSSEChannelManager,
+	createSSERouteHandler,
+} from "./server/index.js";
+export type { SSERouteHandlerConfig } from "./server/route-factory.js";
+// Re-export all types
+export type {
+	ChannelManager,
+	ChannelManagerConfig,
+	QueryInvalidationOptions,
+	SSEConnectionOptions,
+	SSEEvent,
+} from "./types/index.js";

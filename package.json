@@ -1,6 +1,6 @@
 {
 	"name": "@enalmada/start-streaming",
-	"version": "1.0.0",
+	"version": "2.0.0",
 	"scripts": {
 		"build": "turbo build:clear build:script build:declaration build:validate",
 		"build:clear": "node -e \"require('fs').rmSync('dist', {recursive: true, force: true})\"",
@@ -38,25 +38,27 @@
 	},
 	"peerDependencies": {
 		"@tanstack/react-query": "^5.0.0",
+		"@tanstack/react-router": "^1.0.0",
 		"@tanstack/react-start": "^1.0.0",
+		"better-sse": "^0.15.1",
 		"react": "^18.0.0 || ^19.0.0"
 	},
 	"main": "dist/index.js",
 	"types": "dist/index.d.ts",
 	"author": "Adam Lane",
-	"description": "Production-ready real-time streaming infrastructure for TanStack Start. Type-safe async generator streaming with auto-reconnection, exponential backoff, React Query integration, and page visibility API.",
+	"description": "Production-ready Server-Sent Events (SSE) for TanStack Start. Standards-compliant EventSource API with better-sse backend, type-safe channels, auto-reconnection, and TanStack Query integration.",
 	"keywords": [
-		"async-generator",
-		"backoff",
+		"better-sse",
+		"eventsource",
 		"react",
 		"react-query",
 		"real-time",
-		"reconnect",
+		"server-sent-events",
 		"sse",
 		"streaming",
 		"tanstack",
-		"tanstack-start",
-		"websocket"
+		"tanstack-query",
+		"tanstack-start"
 	],
 	"license": "MIT",
 	"bugs": {
@@ -87,11 +89,6 @@
 			"types": "./dist/server/index.d.ts",
 			"import": "./dist/server/index.js",
 			"default": "./dist/server/index.js"
-		},
-		"./utils": {
-			"types": "./dist/utils/index.d.ts",
-			"import": "./dist/utils/index.js",
-			"default": "./dist/utils/index.js"
 		}
 	},
 	"engines": {
