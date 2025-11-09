@@ -458,6 +458,10 @@ MIT © [Adam Lane](https://github.com/Enalmada)
 
 Contributions welcome! Please read the [contributing guidelines](CONTRIBUTING.md) first.
 
+## Example Implementation
+
+See **[TanStarter](https://github.com/Enalmada/tanstarter)** for a complete working example of `@enalmada/start-streaming` in a production TanStack Start application.
+
 ## Support
 
 - [Documentation](https://start-streaming.vercel.app)
