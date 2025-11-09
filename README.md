@@ -208,7 +208,7 @@ const discussionChannels = createSSEChannelManager<DiscussionEvent>({
 
 // Client can handle different event types
 useSSEConnection({
-  endpoint: `/api/sse/discussion/${id}`,
+  endpoint: `/api/sse/discussion/${discussionId}`,
   onEvent: (event) => {
     switch (event.type) {
       case 'comment-added':
@@ -270,7 +270,7 @@ const redis = new Redis({
 });
 
 // In your publish function:
-export function publishCommentEvent(discussionId: string, event: CommentEvent) {
+export async function publishCommentEvent(discussionId: string, event: CommentEvent) {
   // 1. Broadcast to local in-memory channel (current server's connections)
   const channel = commentChannels.getChannel(discussionId);
   channel.broadcast(event, 'message');

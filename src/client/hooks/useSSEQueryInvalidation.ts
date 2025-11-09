@@ -54,6 +54,11 @@ export function useSSEQueryInvalidation<TEvent extends SSEEvent>(options: QueryI
 			// Get query keys to invalidate
 			const keysToInvalidate = typeof queryKeys === "function" ? queryKeys(event) : queryKeys;
 
+			// Do nothing if no keys are provided (prevents invalidating entire cache)
+			if (!keysToInvalidate || keysToInvalidate.length === 0) {
+				return;
+			}
+
 			// Handle single key or array of keys
 			const keyArray = Array.isArray(keysToInvalidate[0])
 				? (keysToInvalidate as unknown[][])
