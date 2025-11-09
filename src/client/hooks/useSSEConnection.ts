@@ -80,8 +80,20 @@ export function useSSEConnection<TEvent extends SSEEvent>(options: SSEConnection
 			// EventSource automatically attempts to reconnect
 		};
 
+		// Close connection before page unload to reduce console noise during hard reload
+		// Note: Not guaranteed to prevent interruption message in all browsers
+		const handleBeforeUnload = () => {
+			if (eventSourceRef.current) {
+				eventSourceRef.current.close();
+				eventSourceRef.current = null;
+			}
+		};
+
+		window.addEventListener("beforeunload", handleBeforeUnload);
+
 		// Cleanup on unmount or when endpoint/enabled changes
 		return () => {
+			window.removeEventListener("beforeunload", handleBeforeUnload);
 			eventSource.close();
 			eventSourceRef.current = null;
 			setConnected(false);
