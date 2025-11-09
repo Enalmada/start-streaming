@@ -1,5 +1,19 @@
 # @enalmada/storybook-addon-mock-urql
 
+## 1.0.0
+
+### Major Changes
+
+- 8c0c7d6: Initial release: Production-ready streaming infrastructure for TanStack Start
+
+  - Auto-reconnection with exponential backoff and jitter
+  - Page Visibility API integration
+  - React Query integration
+  - Event broadcaster factory (EventEmitter/Redis)
+  - Full TypeScript type safety
+  - 21 comprehensive unit tests
+  - Zero runtime dependencies
+
 ## 0.1.1
 
 ### Patch Changes
