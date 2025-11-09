@@ -5,18 +5,16 @@
 [![npm version](https://badge.fury.io/js/@enalmada%2Fstart-streaming.svg)](https://www.npmjs.com/package/@enalmada/start-streaming)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Why v2?
+## Why This Over Raw better-sse?
 
-**v1** attempted a custom TanStack Start native streaming solution using async generators. While functional, it had reliability issues and didn't leverage browser-native APIs.
+This library wraps [better-sse](https://github.com/MatthewWid/better-sse) with TanStack Start/Query-specific patterns:
 
-**v2** uses [better-sse](https://github.com/MatthewWid/better-sse) (standards-compliant SSE) with thin TanStack Start/Query wrappers. This provides:
-
-✅ **Standards-compliant** - Uses browser-native EventSource API
-✅ **Auto-reconnection** - Built into EventSource, no custom logic
-✅ **Type-safe** - Full TypeScript support end-to-end
-✅ **Zero lock-in** - Just better-sse + helpers, easy to customize
-✅ **TanStack Query integration** - Auto-invalidate queries on events
-✅ **Production-ready** - Scalable to multi-server with Redis pub/sub
+✅ **Channel-based architecture** - Automatic resource-keyed broadcasting with memory cleanup
+✅ **TanStack Query integration** - Auto-invalidate queries on SSE events
+✅ **Route handler factory** - Drop-in SSE endpoints for TanStack Start
+✅ **Type-safe end-to-end** - Full TypeScript from server events to client handlers
+✅ **Memory management** - Automatic channel cleanup when sessions disconnect
+✅ **Production patterns** - Redis pub/sub ready for horizontal scaling
 
 ## Installation
 
@@ -354,20 +352,7 @@ TanStack Query integration hook.
 
 **Returns:** `{ connected: boolean }`
 
-## Comparison: v1 vs v2
-
-| Feature | v1 (Async Generators) | v2 (better-sse) |
-|---------|----------------------|-----------------|
-| **Protocol** | Custom NDJSON | Standards-compliant SSE |
-| **Browser API** | Custom fetch stream | Native EventSource |
-| **Reconnection** | Custom logic | Built into EventSource |
-| **Type Safety** | ✓ | ✓ |
-| **TanStack Query** | ✓ | ✓ |
-| **Complexity** | High | Low |
-| **Reliability** | Issues | Production-proven |
-| **Bundle Size** | ~3KB | ~5KB (better-sse) |
-
-## Why EventSource Over WebSockets?
+## Why SSE (EventSource) Over WebSockets?
 
 1. **Simpler**: Unidirectional server→client (perfect for notifications)
 2. **Auto-reconnects**: Built into the browser API
@@ -379,20 +364,12 @@ If you need bidirectional communication, use WebSockets. For server→client upd
 
 ## Examples
 
-See the source repository for complete examples:
+**Real-world implementation**: See [tanstarter](https://github.com/Enalmada/tanstarter) for a complete TanStack Start boilerplate with SSE integration.
+
+Additional examples in this repository:
 - Comment system with real-time updates
 - Live vote counts
 - Presence indicators ("5 users viewing")
-
-## Migration from v1
-
-v1 and v2 are **completely different architectures**. To migrate:
-
-1. Replace async generator server functions with SSE routes
-2. Replace `useStreamInvalidation` with `useSSEQueryInvalidation`
-3. Update event publishing to use channel manager
-
-See `v1-deprecated` branch for old implementation.
 
 ## Contributing
 
